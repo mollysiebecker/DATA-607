@@ -1,0 +1,82 @@
+---
+title: "607 Lab 1"
+author: "Molly Siebecker"
+date: "2023-09-10"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+## Introduction
+
+Skelley, Geoffrey. “Congress Today Is Older than It’s Ever Been.” FiveThirtyEight, FiveThirtyEight, 3 Apr. 2023, fivethirtyeight.com/features/aging-congress-boomers/. 
+
+The article linked above analyzes the median age of each Congress since 1919 (the first Congress to be entirely directly elected.) The article primarily shows how the median ages of both chambers has trended upwards over time, and discusses the outsize influence of the Baby Boomer generation in the 21st century. In my analysis, I am going to compare the ages of the members of the current Congress across party lines.
+
+## Loading the Data
+
+Below, I read the data from a csv of the raw data from github, name it, and load the dplyr package.
+
+```{r}
+theURL <- "https://raw.githubusercontent.com/fivethirtyeight/data/master/congress-demographics/data_aging_congress.csv"
+data_aging_congress <- read.table(file=theURL, header=TRUE, sep=",")
+library(dplyr)
+library(knitr)
+```
+
+## Gaining an Overview of the Data
+
+Below, I show the column names with the first several row entries, as well as summaries of the data in each column.
+
+```{r}
+glimpse(data_aging_congress)
+summary(data_aging_congress)
+```
+
+## Renaming Columns and Values
+
+Here I renamed all the columns, adding clarity where necessary by providing a more complete column name and capitalizing substantial words for stylistic continuity. I also replaced each party code with the name of the party in question.
+
+```{r}
+data_aging_congress <- data_aging_congress %>%
+rename("Nth_Meeting_of_Congress" = "congress", "Start_Date" = "start_date", "Chamber" = "chamber", "State_Abbreviation" = "state_abbrev", "Party" = "party_code", "Full_Name" = "bioname", "Biographical_Directory_Identification_Number" = "bioguide_id", "Date_of_Birth" = "birthday", "Cumulative_Number_of_Congresses_Served" = "cmltv_cong", "Cumulative_Number_of_Congresses_Served_in_Given_Chamber" = "cmltv_chamber", "Age_in_Days" = "age_days", "Age_in_Years" = "age_years", "Generation" = "generation")
+data_aging_congress$Party[data_aging_congress$Party=="100"] <- "Democrat"
+data_aging_congress$Party[data_aging_congress$Party=="200"] <- "Republican"
+data_aging_congress$Party[data_aging_congress$Party=="328"] <- "Independent"
+```
+
+## Creating Subsets
+
+Here I created four subsets, one of the current Congress, one of Republicans, one of Democrats, and another of Independents, all in the current meeting of Congress. I filtered by the number of the current meeting of Congress, 118, and by party. I also excluded all the columns that would be the same for every row within that subset, namely, what meeting of Congress it was, their start date, and the party.
+
+```{r}
+current_congress <- select(filter(data_aging_congress, Nth_Meeting_of_Congress==118,),  c(Chamber,State_Abbreviation,Party,Full_Name,Biographical_Directory_Identification_Number,Date_of_Birth,Cumulative_Number_of_Congresses_Served,Cumulative_Number_of_Congresses_Served_in_Given_Chamber,Age_in_Days,Age_in_Years,Generation))
+current_republicans <- select(filter(data_aging_congress, Nth_Meeting_of_Congress==118, Party=='Republican'),  c(Chamber,State_Abbreviation,Full_Name,Biographical_Directory_Identification_Number,Date_of_Birth,Cumulative_Number_of_Congresses_Served,Cumulative_Number_of_Congresses_Served_in_Given_Chamber,Age_in_Days,Age_in_Years,Generation))
+current_democrats <- select(filter(data_aging_congress, Nth_Meeting_of_Congress==118, Party=='Democrat'),  c(Chamber,State_Abbreviation,Full_Name,Biographical_Directory_Identification_Number,Date_of_Birth,Cumulative_Number_of_Congresses_Served,Cumulative_Number_of_Congresses_Served_in_Given_Chamber,Age_in_Days,Age_in_Years,Generation))
+current_independents <- select(filter(data_aging_congress, Nth_Meeting_of_Congress==118, Party=='Independent'),  c(Chamber,State_Abbreviation,Full_Name,Biographical_Directory_Identification_Number,Date_of_Birth,Cumulative_Number_of_Congresses_Served,Cumulative_Number_of_Congresses_Served_in_Given_Chamber,Age_in_Days,Age_in_Years,Generation))
+kable(current_republicans, col.names=c("Chamber","State Abbreviation","Full Name","Biographical Directory Identification Number","Date of Birth","Cumulative Number of Congresses Served","Cumulative Number of Congresses Served in Given Chamber","Age in Days","Age in Years","Generation"), format="pipe", digits=2, caption="Ages of the Republican Members of the 118th Congress", align="c")
+kable(current_democrats, col.names=c("Chamber","State Abbreviation","Full Name","Biographical Directory Identification Number","Date of Birth","Cumulative Number of Congresses Served","Cumulative Number of Congresses Served in Given Chamber","Age in Days","Age in Years","Generation"), format="pipe", digits=2, caption="Ages of the Democratic Members of the 118th Congress", align="c")
+kable(current_independents, col.names=c("Chamber","State Abbreviation","Full Name","Biographical Directory Identification Number","Date of Birth","Cumulative Number of Congresses Served","Cumulative Number of Congresses Served in Given Chamber","Age in Days","Age in Years","Generation"), format="pipe", digits=2, caption="Ages of the Independent Members of the 118th Congress", align="c")
+```
+```
+```
+
+## Statistics and Graphics
+
+Since I want to compare the ages of each party in Congress, I found the five number summary of the age, in years, of each subset. Since there are only three independent memebrs of the current Congress, I decided to compare only the ages of the Democrats and Republicans in a boxplot. I also sorted all members of the current Congress by their age in order to get a glimpse of the members at the extreme ages.
+
+```{r}
+summary(current_republicans$Age_in_Years)
+summary(current_democrats$Age_in_Years)
+summary(current_independents$Age_in_Years)
+boxplot(current_republicans$Age_in_Years, current_democrats$Age_in_Years, xlab="Republicans                             Democrats", ylab="Age in Years", main="Ages of the 118th Congress by Party")
+```
+
+## Findings and Recommendations
+
+The findings shown above reveal that the Democratic party is generally older than the Republican party, having the greater mean, median, and 3rd quartile ages, with roughly comparable maximum and 1st quartile ages. Interestingly, sorting by age reveals that, at a glance, Democrats are more represented at both the high and low extremes. 
+
+The article notes that although Congress today is older than ever in the past, the population as a whole is also aging. Further study could incorporate data showing the median age of the 25+ population and the 30+ population at the time, and create new column, one showing the difference between the median age of the House and the median age of the 25+ population, and another showing the difference between the median age of the Senate and the median age of the 30+ population. Line graphs of these differences over time would reveal whether Congress is trending older than the age of the population overall, or whether the current age gap is roughly similar to what it has been in the past.
