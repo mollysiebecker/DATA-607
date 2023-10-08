@@ -1,0 +1,256 @@
+---
+title: "DATA 607 Week 5 Assignment"
+author: "Molly Siebecker"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Loading the Data and Libraries
+
+In this code block, I load the required libraries and read the csv in my Github repository into a data frame.
+
+```{r}
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+library(knitr)
+
+airline_url <- "https://raw.githubusercontent.com/mollysiebecker/DATA-607/main/Two_Airlines_Untidy_Data.csv"
+
+airline_df <- read.csv(url(airline_url))
+print(airline_df)
+```
+
+# Tidying the Data
+
+In this code block, I remove the row of NA's, rename the columns, and replace missing values in the airline column with "NA," which allows them to be filled in with the previous value.
+
+```{r}
+airline_df <- airline_df %>%
+  na.omit() %>%
+   rename("airline" = "X", "on_time" = "X.1", "Los Angeles" = "Los.Angeles", "San Diego" = "San.Diego", "San Francisco" = "San.Francisco") %>%
+  mutate(airline = na_if(airline, "")) %>%
+  fill(airline)
+
+kable(airline_df, format = "pipe", col.names = c("Airline", "On Time Status", "Los Angeles", "Phoenix", "San Diego", "San Francisco", "Seattle"), caption = "Wide Data Frame", align = "c")
+```
+
+
+Finally, I lengthen the data set by pivoting the five columns for each city into two new columns, "destination" and "frequency." Now, each column is a variable, each row is an observation, and each cell is a value, so the data frame is tidy.
+```{r}
+airline_df <- airline_df %>%
+  pivot_longer(cols = 3:7, names_to = "destination", values_to = "frequency")
+
+kable(airline_df, format = "pipe", col.names = c("Airline", "On Time Status", "Destination", "Frequency"), caption = "Arrival Delays of Two Airlines to Five Major Destinations", align = "c")
+```
+
+
+# Analysis
+
+**Total Frequency** 
+
+In this code block, I create a new data frame that shows the total number of on time and delayed flights for each airline, and display this data in a stacked bar graph.
+```{r}
+airline_total_frequency <- airline_df %>%
+  group_by(airline, on_time) %>%
+  summarize(total_frequency = sum(frequency), .groups = "drop") %>%
+  pivot_wider(names_from = on_time, values_from = total_frequency, values_fill = 0)
+
+kable(airline_total_frequency, format = "pipe", col.names = c("Airline", "Number Delayed", "Number On Time"), caption = "Total Numbers of Delayed and On Time Flights by Airline", align = "c")
+
+ggplot(airline_df, aes(x = airline, y = frequency, fill = on_time)) +
+  geom_bar(stat = "identity", position = "stack", alpha = 0.6) +
+  labs(title = "Total Numbers of Delayed and On Time Flights by Airline", x = "Airline", y = "Frequency") +
+  scale_fill_manual(values = c("on time" = "blue", "delayed" = "red")) +
+  labs (fill = "")
+```
+
+**Relative Frequencies by Airline**
+
+At a glance the two airlines appear to have similar rates of delay, but calculating the relative frequencies will confirm this. Below, I calculate the relative frequencies by airline, and display these relative frequencies in a stacked bar graph.
+
+```{r}
+airline_relative_frequency <- airline_total_frequency %>%
+  mutate(percent_delayed = `delayed`/(`delayed`+`on time`)*100, percent_on_time = `on time`/(`delayed`+`on time`)*100) %>%
+  select(-c(2:3))
+
+kable(airline_relative_frequency, format = "pipe", digits = 1, col.names = c("Airline", "Percent Delayed", "Percent On Time"), caption = "Relative Frequencies of Delayed and On Time Flights by Airline", align = "c")
+
+airline_relative_frequency %>%
+  pivot_longer(cols = 2:3, names_to = "on_time", values_to = "percentage") %>%
+  ggplot(aes(x = airline, y = percentage, fill = on_time)) +
+  geom_bar(stat = "identity", position = "stack", alpha = 0.6) +
+  labs(title = "Relative Frequencies of Delayed and On Time Flights by Airline", x = "Airline", y = "Percentage") +
+  scale_fill_manual(values = c("percent_on_time" = "blue", "percent_delayed" = "red"), labels = c("delayed", "on time")) +
+  labs (fill = "", )
+```
+
+Below, I repeat the above process of calculating relative frequencies, filtering by destination.
+
+```{r}
+## Creating new data frames and kables
+
+la_relative_frequency <- airline_df %>%
+  filter(destination == "Los Angeles") %>%
+  group_by(airline, on_time) %>%
+  summarize(total_frequency = sum(frequency), .groups = "drop") %>%
+  pivot_wider(names_from = on_time, values_from = total_frequency, values_fill = 0) %>%
+  mutate(percent_delayed = `delayed`/(`delayed`+`on time`)*100, percent_on_time = `on time`/(`delayed`+`on time`)*100) %>%
+  select(-c(2:3))
+
+kable(la_relative_frequency, format = "pipe", digits = 1, col.names = c("Airline", "Percent Delayed", "Percent On Time"), caption = "Los Angeles: Relative Frequencies of Delayed and On Time Flights by Airline", align = "c")
+
+phoenix_relative_frequency <- airline_df %>%
+  filter(destination == "Phoenix") %>%
+  group_by(airline, on_time) %>%
+  summarize(total_frequency = sum(frequency), .groups = "drop") %>%
+  pivot_wider(names_from = on_time, values_from = total_frequency, values_fill = 0) %>%
+  mutate(percent_delayed = `delayed`/(`delayed`+`on time`)*100, percent_on_time = `on time`/(`delayed`+`on time`)*100) %>%
+  select(-c(2:3))
+
+kable(phoenix_relative_frequency, format = "pipe", digits = 1, col.names = c("Airline", "Percent Delayed", "Percent On Time"), caption = "Phoenix: Relative Frequencies of Delayed and On Time Flights by Airline", align = "c")
+
+sd_relative_frequency <- airline_df %>%
+  filter(destination == "San Diego") %>%
+  group_by(airline, on_time) %>%
+  summarize(total_frequency = sum(frequency), .groups = "drop") %>%
+  pivot_wider(names_from = on_time, values_from = total_frequency, values_fill = 0) %>%
+  mutate(percent_delayed = `delayed`/(`delayed`+`on time`)*100, percent_on_time = `on time`/(`delayed`+`on time`)*100) %>%
+  select(-c(2:3))
+
+kable(sd_relative_frequency, format = "pipe", digits = 1, col.names = c("Airline", "Percent Delayed", "Percent On Time"), caption = "San Diego: Relative Frequencies of Delayed and On Time Flights by Airline", align = "c")
+
+sf_relative_frequency <- airline_df %>%
+  filter(destination == "San Francisco") %>%
+  group_by(airline, on_time) %>%
+  summarize(total_frequency = sum(frequency), .groups = "drop") %>%
+  pivot_wider(names_from = on_time, values_from = total_frequency, values_fill = 0) %>%
+  mutate(percent_delayed = `delayed`/(`delayed`+`on time`)*100, percent_on_time = `on time`/(`delayed`+`on time`)*100) %>%
+  select(-c(2:3))
+
+kable(sf_relative_frequency, format = "pipe", digits = 1, col.names = c("Airline", "Percent Delayed", "Percent On Time"), caption = "San Francisco: Relative Frequencies of Delayed and On Time Flights by Airline", align = "c")
+
+seattle_relative_frequency <- airline_df %>%
+  filter(destination == "Seattle") %>%
+  group_by(airline, on_time) %>%
+  summarize(total_frequency = sum(frequency), .groups = "drop") %>%
+  pivot_wider(names_from = on_time, values_from = total_frequency, values_fill = 0) %>%
+  mutate(percent_delayed = `delayed`/(`delayed`+`on time`)*100, percent_on_time = `on time`/(`delayed`+`on time`)*100) %>%
+  select(-c(2:3))
+
+kable(seattle_relative_frequency, format = "pipe", digits = 1, col.names = c("Airline", "Percent Delayed", "Percent On Time"), caption = "Seattle: Relative Frequencies of Delayed and On Time Flights by Airline", align = "c")
+
+##Creating bar graphs
+
+la_relative_frequency %>%
+  pivot_longer(cols = 2:3, names_to = "on_time", values_to = "percentage") %>%
+  ggplot(aes(x = airline, y = percentage, fill = on_time)) +
+  geom_bar(stat = "identity", position = "stack", alpha = 0.6) +
+  labs(title = "Los Angeles: Relative Frequencies of Delayed and On Time Flights by Airline", x = "Airline", y = "Percentage") +
+  scale_fill_manual(values = c("percent_on_time" = "blue", "percent_delayed" = "red"), labels = c("delayed", "on time")) +
+  labs (fill = "", )
+
+phoenix_relative_frequency %>%
+  pivot_longer(cols = 2:3, names_to = "on_time", values_to = "percentage") %>%
+  ggplot(aes(x = airline, y = percentage, fill = on_time)) +
+  geom_bar(stat = "identity", position = "stack", alpha = 0.6) +
+  labs(title = "Phoenix: Relative Frequencies of Delayed and On Time Flights by Airline", x = "Airline", y = "Percentage") +
+  scale_fill_manual(values = c("percent_on_time" = "blue", "percent_delayed" = "red"), labels = c("delayed", "on time")) +
+  labs (fill = "", )
+
+sd_relative_frequency %>%
+  pivot_longer(cols = 2:3, names_to = "on_time", values_to = "percentage") %>%
+  ggplot(aes(x = airline, y = percentage, fill = on_time)) +
+  geom_bar(stat = "identity", position = "stack", alpha = 0.6) +
+  labs(title = "San Diego: Relative Frequencies of Delayed and On Time Flights by Airline", x = "Airline", y = "Percentage") +
+  scale_fill_manual(values = c("percent_on_time" = "blue", "percent_delayed" = "red"), labels = c("delayed", "on time")) +
+  labs (fill = "", )
+
+sf_relative_frequency %>%
+  pivot_longer(cols = 2:3, names_to = "on_time", values_to = "percentage") %>%
+  ggplot(aes(x = airline, y = percentage, fill = on_time)) +
+  geom_bar(stat = "identity", position = "stack", alpha = 0.6) +
+  labs(title = "San Francisco: Relative Frequencies of Delayed and On Time Flights by Airline", x = "Airline", y = "Percentage") +
+  scale_fill_manual(values = c("percent_on_time" = "blue", "percent_delayed" = "red"), labels = c("delayed", "on time")) +
+  labs (fill = "", )
+
+seattle_relative_frequency %>%
+  pivot_longer(cols = 2:3, names_to = "on_time", values_to = "percentage") %>%
+  ggplot(aes(x = airline, y = percentage, fill = on_time)) +
+  geom_bar(stat = "identity", position = "stack", alpha = 0.6) +
+  labs(title = "Seattle: Relative Frequencies of Delayed and On Time Flights by Airline", x = "Airline", y = "Percentage") +
+  scale_fill_manual(values = c("percent_on_time" = "blue", "percent_delayed" = "red"), labels = c("delayed", "on time")) +
+  labs (fill = "")
+```
+
+**Relative Frequencies by Destination**
+
+Finally, I compute and display the relative frequencies for each destination, and then filter by airline.
+
+```{r}
+destination_relative_frequency <- airline_df %>%
+  group_by(destination, on_time) %>%
+  summarize(total_frequency = sum(frequency), .groups = "drop") %>%
+  pivot_wider(names_from = on_time, values_from = total_frequency, values_fill = 0) %>%
+  mutate(percent_delayed = `delayed`/(`delayed`+`on time`)*100, percent_on_time = `on time`/(`delayed`+`on time`)*100) %>%
+  select(-c(2:3))
+
+kable(destination_relative_frequency, format = "pipe", digits = 1, col.names = c("Destination", "Percent Delayed", "Percent On Time"), caption = "Relative Frequencies of Delayed and On Time Flights by Destination", align = "c")
+
+destination_relative_frequency %>%
+  pivot_longer(cols = 2:3, names_to = "on_time", values_to = "percentage") %>%
+  ggplot(aes(x = destination, y = percentage, fill = on_time)) +
+  geom_bar(stat = "identity", position = "stack", alpha = 0.6) +
+  labs(title = "Relative Frequencies of Delayed and On Time Flights by Destination", x = "Destination", y = "Percentage") +
+  scale_fill_manual(values = c("percent_on_time" = "blue", "percent_delayed" = "red"), labels = c("delayed", "on time")) +
+  labs (fill = "")
+```
+```{r}
+alaska_relative_frequency <- airline_df %>%
+  filter(airline == "Alaska") %>%
+  group_by(destination, on_time) %>%
+  summarize(total_frequency = sum(frequency), .groups = "drop") %>%
+  pivot_wider(names_from = on_time, values_from = total_frequency, values_fill = 0) %>%
+  mutate(percent_delayed = `delayed`/(`delayed`+`on time`)*100, percent_on_time = `on time`/(`delayed`+`on time`)*100) %>%
+  select(-c(2:3))
+
+kable(alaska_relative_frequency, format = "pipe", digits = 1, col.names = c("Destination", "Percent Delayed", "Percent On Time"), caption = "Alaska Airlines: Relative Frequencies of Delayed and On Time Flights by Destination", align = "c")
+
+am_west_relative_frequency <- airline_df %>%
+  filter(airline == "AM West") %>%
+  group_by(destination, on_time) %>%
+  summarize(total_frequency = sum(frequency), .groups = "drop") %>%
+  pivot_wider(names_from = on_time, values_from = total_frequency, values_fill = 0) %>%
+  mutate(percent_delayed = `delayed`/(`delayed`+`on time`)*100, percent_on_time = `on time`/(`delayed`+`on time`)*100) %>%
+  select(-c(2:3))
+
+kable(am_west_relative_frequency, format = "pipe", digits = 1, col.names = c("Destination", "Percent Delayed", "Percent On Time"), caption = "AM West: Relative Frequencies of Delayed and On Time Flights by Destination", align = "c")
+
+alaska_relative_frequency %>%
+  pivot_longer(cols = 2:3, names_to = "on_time", values_to = "percentage") %>%
+  ggplot(aes(x = destination, y = percentage, fill = on_time)) +
+  geom_bar(stat = "identity", position = "stack", alpha = 0.6) +
+  labs(title = "Alaska: Relative Frequencies of Delayed and On Time Flights by Destination", x = "Destination", y = "Percentage") +
+  scale_fill_manual(values = c("percent_on_time" = "blue", "percent_delayed" = "red"), labels = c("delayed", "on time")) +
+  labs (fill = "")
+
+am_west_relative_frequency %>%
+  pivot_longer(cols = 2:3, names_to = "on_time", values_to = "percentage") %>%
+  ggplot(aes(x = destination, y = percentage, fill = on_time)) +
+  geom_bar(stat = "identity", position = "stack", alpha = 0.6) +
+  labs(title = "AM West: Relative Frequencies of Delayed and On Time Flights by Destination", x = "Destination", y = "Percentage") +
+  scale_fill_manual(values = c("percent_on_time" = "blue", "percent_delayed" = "red"), labels = c("delayed", "on time")) +
+  labs (fill = "")
+```
+
+## Findings & Recommendations
+
+Overall, the two airlines have similar rates of on time arrivals, with AM West having a slightly greater rate of on time arrivals. However, when filtering by destination, Alaska has a greater rate of on time arrivals for each of the five cities specified, which is possible since the two airlines operate different numbers of flights into each city. The two airlines have similar rates of on time arrivals for both Los Angeles and Phoenix, while Alaska has more of an advantage for San Diego, San Francisco, and Seattle. We can also see when grouping by destination that San Francisco and Seattle have lower rates of on time arrivals overall, and each airline has lower rates of on time arrivals for those two destinations. Further analysis could look at the departure cities and rates of on time departure for the two airlines.
+
+
