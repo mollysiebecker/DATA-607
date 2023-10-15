@@ -1,0 +1,88 @@
+---
+title: "DATA 607 Project 2 Baseball"
+author: "Molly Siebecker"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(knitr)
+library(dplyr)
+library(ggplot2)
+```
+
+## Tidying the Data
+
+In the following code block, I load the csv of Marley's baseball data and glimpse the data frame. I am interested in comparing how different positions fare in hitting home runs over time.
+```{r}
+baseball_df <- read.csv(file = "/Users/mollysiebecker/DATA 607/Baseball Project 2 Data.csv")
+head(baseball_df)
+```
+
+Below, I rename the columns, fill in missing team values, and pivot longer.
+```{r}
+baseball_df <- baseball_df %>%
+   rename("team" = "Team", "position" = "Position", "2018" = "X2018.HRs", "2019" = "X2019.HRs", "2021" = "X2021.HRs", "2022" = "X2022.HRs", "2023" = "X2023.HRs") %>%
+  mutate(team = na_if(team, "")) %>%
+  fill(team) %>%
+  pivot_longer(cols = 3:7, names_to = "year", values_to = "home_runs")
+
+```
+
+Finally, I replace values for greater clarity and display the first 40 rows using kable.
+```{r}
+baseball_df$team[baseball_df$team == "BAL"] <- "Baltimore Orioles"
+baseball_df$team[baseball_df$team == "BOS"] <- "Boston Red Sox"
+baseball_df$team[baseball_df$team == "NYY"] <- "New York Yankees"
+baseball_df$team[baseball_df$team == "TBR"] <- "Tampa Bay Rays"
+baseball_df$team[baseball_df$team == "TOR"] <- "Toronto Blue Jays"
+baseball_df$position[baseball_df$position == "C"] <- "catcher"
+baseball_df$position[baseball_df$position == "1B"] <- "first base"
+baseball_df$position[baseball_df$position == "2B"] <- "second base"
+baseball_df$position[baseball_df$position == "3B"] <- "third base"
+baseball_df$position[baseball_df$position == "SS"] <- "shortstop"
+baseball_df$position[baseball_df$position == "LF"] <- "left field"
+baseball_df$position[baseball_df$position == "CF"] <- "center field"
+baseball_df$position[baseball_df$position == "RF"] <- "right field"
+baseball_df$position[baseball_df$position == "DH"] <- "designated hitter"
+
+baseball_subset <- baseball_df[1:40, ]
+kable(baseball_subset, format = "pipe", col.names = c("Team", "Position", "Year", "Number of Home Runs"), caption = "Number of Home Runs by Team, Position, and Year", align = "c")
+```
+
+## Analysis
+
+Below, I create a new variable called "position_group" that indicates whether players are in the infield or outfield, or simply keeps the values of "catcher" or "designated hitter." Then, I create a new data frame that calculates the average number of home runs for each position group, per year.
+```{r}
+baseball_df <- baseball_df %>%
+  mutate(position_group = case_when(
+    position == "catcher" ~ "catcher",
+    position == "designated hitter" ~ "designated hitter",
+    position == "first base"|position == "second base"|position == "third base"|position == "shortstop" ~ "infield",
+    position == "left field"|position == "center field"|position == "right field" ~ "outfield"
+  )) 
+
+baseball_summary <- baseball_df %>%
+  group_by(position_group, year) %>%
+  summarize(avg_home_runs = mean(home_runs), .groups = "drop")
+```
+
+Finally, I coerce the "year" variable to be an integer, and display the data in a line graph. I include specific points for each value so as not to mislead the viewer into thinking there were data points for 2020.
+```{r}
+baseball_summary$year <- as.integer(baseball_summary$year)
+
+ggplot(baseball_summary, aes(x = year, y = avg_home_runs, color = position_group)) + 
+  geom_point() +
+  geom_line() +
+  labs(title="Average Number of Home Runs per Year by Position", x="Year", y="Average Number of Home Runs")
+```
+
+## Findings and Recommendations
+
+In almost each year measured, the designated hitters hit more home runs than any other position, which makes sense since they are especially selected for that role. Again, in almost every year measured, catchers hit the least number of home runs, which also makes sense since their position is the most specialized for defense and not offense. The outfielders generally hit more home runs than the infielders, until 2022, when all positions showed a sharp decrease in the number of home runs hit (this was also the only year in which the designated hitters did not hit the most home runs.) From 2022 to 2023, the number of home runs hit started to rebound again, regardless of position. Further analysis should take into account other factors in order to try to determine what might have caused the dip in home runs in 2022.
+

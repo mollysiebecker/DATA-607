@@ -1,0 +1,89 @@
+---
+title: "DATA 607 Project 2 Work Order"
+author: "Molly Siebecker"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(knitr)
+library(dplyr)
+library(ggplot2)
+```
+
+## Tidying the Data
+
+In the following code block, I load the csv of Sean's work order data and glimpse the data frame. I am interested in determining if there is a backlog in any one step of the work order process, and specifically, if this varies by whether or not the work order is preventative or corrective.
+```{r}
+work_order_url <- "https://raw.githubusercontent.com/mollysiebecker/DATA-607/main/work_order_csv_untidy.csv"
+work_order <- read.csv(url(work_order_url))
+head(work_order)
+```
+
+In the following code block, I drop the first row, rename the columns, fill in the missing values in the Building column, and pivot longer.
+```{r}
+work_order <- work_order[-1, ]
+work_order <- work_order %>%
+  rename("building" = "Work.Orders", "maintenance_type" = "X", "no_assign" = "Work.Order.Status", "work_assign" = "X.1", "work_plan" = "X.2", "work_sched" = "X.3", "in_progress" = "X.4", "complete" = "X.5") %>%
+  mutate(building = na_if(building, "")) %>%
+  fill(building) %>%
+  pivot_longer(cols = 3:8, names_to = "status", values_to = "count")
+```
+
+Below, I replace values for greater clarity, and display the resulting tidy data frame using kable.
+```{r}
+work_order$status[work_order$status == "no_assign"] <- "not assigned"
+work_order$status[work_order$status == "work_assign"] <- "assigned"
+work_order$status[work_order$status == "work_plan"] <- "planned"
+work_order$status[work_order$status == "work_sched"] <- "scheduled"
+work_order$status[work_order$status == "in_progress"] <- "in progress"
+work_order$status[work_order$status == "complete"] <- "completed"
+work_order$maintenance_type[work_order$maintenance_type == "Prev Maintenance"] <- "preventative"
+work_order$maintenance_type[work_order$maintenance_type == "Corr Maintenacnce"] <- "corrective"
+
+kable(work_order, format = "pipe", col.names = c("Building", "Maintenance Type", "Status", "Count"), caption = "Work Order Status by Building and Maintenance Type", align = "c")
+```
+
+## Analysis
+
+Below, I coerce the count variable to be numeric, and specify the correct order of the work status to aid in visualizing the data later.
+```{r}
+work_order$count <- as.numeric(work_order$count)
+work_flow_order <- c("not assigned", "assigned", "planned", "scheduled", "in progress", "completed")
+work_order$status <- factor(work_order$status, levels = work_flow_order)
+```
+
+Below, I create a new data frame that finds the total number of projects in each maintenance category, grouped by status, then display this data in a bar graph.
+```{r}
+work_order_summary <- work_order %>%
+  group_by(maintenance_type, status) %>%
+  summarize(total_orders = sum(count), .groups = "drop")
+
+ggplot(work_order_summary, aes(x = maintenance_type, y = total_orders, fill = status)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Number of Work Projects by Maintenance Type",
+       x = "Maintenance Type", y = "Count") +
+  scale_fill_brewer(palette = "Set3")
+```
+
+Since it is clear that there are vastly more projects that are completed, I create a new data frame filtering these out, to aid in visualizing how the remaining work order statuses compare.
+```{r}
+work_order_summary_incomplete <- work_order_summary %>%
+  filter(!(status == "completed")) 
+
+ggplot(work_order_summary_incomplete, aes(x = maintenance_type, y = total_orders, fill = status)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Number of Work Projects by Maintenance Type (Incomplete Projects)",
+       x = "Maintenance Type", y = "Count") +
+  scale_fill_brewer(palette = "Set3")
+```
+
+## Findings and Recommendations
+
+Many more preventative than corrective orders have been placed, and for both types, most of the orders are completed. Out of those that are not completed, preventative and corrective maintenance follow a similar pattern for all except "scheduled" work orders. Scheduled work orders are the most common status for preventative maintenance, and the least common for corrective maintenance. One possible interpretation is that corrective maintenance is likely to be more urgent than preventative maintenance, and therefore when corrective maintenance is scheduled, it is likely to be scheduled to happen very soon, and quickly switch from "scheduled" to "in progress," whereas preventative maintenance may be more likely to be scheduled further in advance, resulting in the higher number of scheduled projects. Further data collection and analysis could confirm this by gathering the dates on which each project is moved into each status, to find the average time that corrective maintanence and preventative maintenance projects stay in "scheduled."
+

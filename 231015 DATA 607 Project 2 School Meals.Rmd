@@ -1,0 +1,124 @@
+---
+title: "DATA 607 Project 2 School Meals"
+author: "Molly Siebecker"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(knitr)
+library(dplyr)
+library(ggplot2)
+```
+
+## Tidying the Data
+
+In the following code block, I load the csv of school meals in NYC and glimpse the data frame. I am interested in comparing student participation in school meals by borough and by type of meal.
+```{r}
+school_food_url <- "https://raw.githubusercontent.com/mollysiebecker/DATA-607/main/2019_School_Food_Report_LL215.csv"
+
+school_food <- read.csv(url(school_food_url))
+head(school_food)
+```
+
+In the following code block, I drop columns that only indicate whether a given type of meal is offered and rename the columns.
+```{r}
+school_food <- school_food %>%
+  select(-c(2:6, 11:16, 19:20)) %>%
+  rename("borough" = "Borough", "breakfast_bb_fy18" = "Breakfast.Before.Bell.ADP.............FY18", "breakfast_bb_fy19" = "Breakfast.Before.Bell.ADP.............FY19", "breakfast_class_fy18" = "Breakfast.In.Classroom.ADP..where.available...see..Key..tab............FY18", "breakfast_class_fy19" = "Breakfast.In.Classroom.ADP..where.available...see..Key..tab............FY19")
+```
+
+I'm not interested in the difference between breakfast before the bell and breakfast in the classroom, so I create a new variable that sums the two types of breakfast.
+```{r}
+school_food$breakfast_bb_fy18[is.na(school_food$breakfast_bb_fy18)] <- 0
+school_food$breakfast_bb_fy19[is.na(school_food$breakfast_bb_fy19)] <- 0
+school_food$breakfast_class_fy18[is.na(school_food$breakfast_class_fy18)] <- 0
+school_food$breakfast_class_fy19[is.na(school_food$breakfast_class_fy19)] <- 0
+
+school_food <- school_food %>%
+  mutate(breakfast_fy18 = breakfast_bb_fy18+breakfast_class_fy18,
+         breakfast_fy19 = breakfast_bb_fy19+breakfast_class_fy19,
+         `breakfast_bb_fy18` = NULL,
+         `breakfast_class_fy18` = NULL,
+         `breakfast_bb_fy19` = NULL,
+         `breakfast_class_fy19` = NULL)
+```
+
+Finally, I pivot longer, and extract strings for the fiscal year and type of meal, then replace values for greater clarity. I display the first 40 rows of the resulting tidy data set using kable.
+```{r}
+school_food <- school_food %>%
+pivot_longer(cols = 2:9, names_to = "meal", values_to = "avg_daily_pop")
+  
+school_food <- school_food %>%
+  mutate(
+    fiscal_year = str_extract(school_food$meal, "\\d{2}"),
+    meal = str_extract(school_food$meal, "[:alpha:]+(?=\\.)|[:alpha:]+(?=\\_)")) %>%
+  select(borough, meal, fiscal_year, avg_daily_pop)
+
+school_food$meal[school_food$meal == "Lunches"] <- "lunch"
+school_food$meal[school_food$meal == "Snacks"] <- "snack"
+school_food$meal[school_food$meal == "Suppers"] <- "supper"
+school_food$fiscal_year[school_food$fiscal_year == "18"] <- "2018"
+school_food$fiscal_year[school_food$fiscal_year == "19"] <- "2019"
+school_food$borough[school_food$borough == "M"] <- "Manhattan"
+school_food$borough[school_food$borough == "Q"] <- "Queens"
+school_food$borough[school_food$borough == "X"] <- "Bronx"
+school_food$borough[school_food$borough == "K"] <- "Brooklyn"
+school_food$borough[school_food$borough == "R"] <- "Staten Island"
+
+school_food_subset <- school_food[1:40, ]
+kable(school_food_subset, format = "pipe", col.names = c("Borough", "Meal", "Fiscal Year", "Average Daily Population"), caption = "Student Meal Participation by Borough, Meal, and Year", align = "c")
+```
+
+## Analysis
+
+Below, I create two new data frames, one that averages the average daily population in a given school (in schools where the meal is offered) for each meal by borough (including both 2018 and 2019,) and another that calculates the total average daily population for each borough. Then I specify the order of the meals for ease in visualization and display the results of each data frame in a bar graph.
+```{r}
+school_food_summary <- school_food %>%
+  drop_na() %>%
+  group_by(borough, meal) %>%
+  summarize(borough_wide_adp = mean(avg_daily_pop), .groups = "drop")
+
+school_food_borough_total <- school_food_summary %>%
+  drop_na() %>%
+  group_by(borough) %>%
+  summarize(borough_wide_adp = sum(borough_wide_adp), .groups = "drop")
+
+ggplot(school_food_borough_total, aes(x = borough, y = borough_wide_adp)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "School Meals: Average Daily Population by Borough",
+       x = "Borough", y = "Average Daily Population") +
+  scale_fill_brewer(palette = "Set3")
+
+meal_order <- c("breakfast", "lunch", "snack", "supper")
+school_food_summary$meal <- factor(school_food_summary$meal, levels = meal_order)
+ggplot(school_food_summary, aes(x = borough, y = borough_wide_adp, fill = meal)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "School Meals: Average Daily Population by Borough and Meal",
+       x = "Borough", y = "Average Daily Population") +
+  scale_fill_brewer(palette = "Set3")
+```
+
+Below, I create a similar data frame and bar graph, grouping by year, to check to see if there was a significant difference in student meal participation in 2018 and 2019.
+```{r}
+school_food_summary_year <- school_food %>%
+  drop_na() %>%
+  group_by(fiscal_year, meal) %>%
+  summarize(yearly_adp = mean(avg_daily_pop), .groups = "drop")
+
+ggplot(school_food_summary_year, aes(x = fiscal_year, y = yearly_adp, fill = meal)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "School Meals: Average Daily Population by Year",
+       x = "Fiscal Year", y = "Average Daily Population") +
+  scale_fill_brewer(palette = "Set3")
+```
+
+## Findings and Recommendations
+
+Student participation in school meals, as measured by average daily population, was similar across meal types from 2018 to 2019, with only a slight decrease. However, it is sufficiently similar to justify grouping both years together when comparing student participation by borough. In each borough, lunch is the meal with the greatest student participation, followed by breakfast in all boroughs except Manhattan, in which snack slightly exceeds breakfast. Queens has the greatest student participation, as measured by average number of students, for all meals overall, as well as for the two most popular meals. What this data cannot measure is how many students participate relative to the enrollment at each school, which would provide a greater basis for comparison across boroughs. Further analysis should join this data with data that shows the enrollment at each school in order to calculate this proportion.
+
