@@ -1,0 +1,252 @@
+---
+title: "DATA 607 Week 10 Sentiment Analysis"
+author: "Molly Siebecker"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Sentiment Analysis in the Work of Taylor Swift: "Happy, Free, Confused, and Lonely at the Same Time"
+
+In this assignment, I chose to perform sentiment analysis on Taylor Swift's lyrics. I wanted to determine her most "positive" and "negative" songs based on the "bing" sentiment lexicon. Then, I decided to also look further at the more specific sentiments "joy" and "sadness" in the "nrc" sentiment lexicon to see if there were an association between lyrics associated with those emotions and whether the song were in a major or minor key. First, I load the required libraries, including "taylor," which contains the necessary data for analysis.
+```{r}
+library(tidytext)
+library(janeaustenr)
+library(taylor)
+library(dplyr)
+library(stringr)
+library(tidyr)
+library(ggplot2)
+```
+
+Below is the sample code from Chapter 2 of the textbook that analyzes the works of Jane Austen using sentiment analysis. (Silge, Julia, and David Robinson. Text Mining with R: A Tidy Approach. O’Reilly Media, 2017.)
+```{r}
+tidy_books <- austen_books() %>%
+  group_by(book) %>%
+  mutate(
+    linenumber = row_number(),
+    chapter = cumsum(str_detect(text, 
+                                regex("^chapter [\\divxlc]", 
+                                      ignore_case = TRUE)))) %>%
+  ungroup() %>%
+  unnest_tokens(word, text)
+
+nrc_joy <- get_sentiments("nrc") %>% 
+  filter(sentiment == "joy")
+
+tidy_books %>%
+  filter(book == "Emma") %>%
+  inner_join(nrc_joy) %>%
+  count(word, sort = TRUE)
+
+jane_austen_sentiment <- tidy_books %>%
+  inner_join(get_sentiments("bing"), relationship = "many-to-many") %>%
+  count(book, index = linenumber %/% 80, sentiment) %>%
+  pivot_wider(names_from = sentiment, values_from = n, values_fill = 0) %>% 
+  mutate(sentiment = positive - negative)
+
+
+ggplot(jane_austen_sentiment, aes(index, sentiment, fill = book)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~book, ncol = 2, scales = "free_x")
+
+```
+
+## Loading and Transforming Data: "I Laid the Groundwork"
+
+I want to remove songs that are singles, features, or covers to focus on her ten studio albums. I also want to avoid duplicating lyrics, so, using a regex, I filter out all the songs that are "Taylor's Versions" of previously released songs, as well as Radio Edits, Remixes, Demo versions, etc. However, I keep songs that are "Taylor's Version [From the Vault]" because those were not previously released and contain unique lyrics. I also removed the song "All Too Well" because it contains duplicate lyrics that are captured in "All Too Well (Ten Minute Version.)" I removed many of the columns containing Spotify data about the tracks. For some reason the song "Hits Different" was missing data that I filled in. I also removed "Taylor's Version" from album titles to simplify analysis.
+```{r}
+pattern <- "Version(?!.+[From The Vault])|Edit|Remix|Original"
+
+##removes covers, singles, features, duplicate lyrics, and unnecessary columns
+taylor_songs_filtered <- taylor_all_songs %>%
+  filter(!str_detect(track_name, pattern)) %>%
+  filter(ep == FALSE) %>%
+  filter(row_number() != 60) %>%
+  select(-c(2:3,6:21,23:25,28))
+
+##adds missing data for "Hits Different"
+taylor_songs_filtered[186, "tempo"] <- 106
+taylor_songs_filtered[186, "key_name"] <- "F"
+taylor_songs_filtered[186, "mode_name"] <- "major"
+
+##removes "Taylor's Version" from album titles
+taylor_songs_filtered$album_name[taylor_songs_filtered$album_name == "Red (Taylor's Version)"] <- "Red"
+taylor_songs_filtered$album_name[taylor_songs_filtered$album_name == "Fearless (Taylor's Version)"] <- "Fearless"
+
+```
+
+This data set has not been updated with the vault tracks released in 2023, so I created csv's of their lyrics that I loaded here.
+```{r}
+electric_touch_lyrics <- read.csv("/Users/mollysiebecker/Downloads/recent vault track lyrics - electric touch lyrics (1).csv", header = TRUE)
+when_emma_lyrics <- read.csv("/Users/mollysiebecker/Downloads/recent vault track lyrics - when emma falls in love lyrics.csv", header = TRUE)
+i_can_see_you_lyrics <- read.csv("/Users/mollysiebecker/Downloads/recent vault track lyrics - i can see you lyrics.csv", header = TRUE)
+castles_crumbling_lyrics <- read.csv("/Users/mollysiebecker/Downloads/recent vault track lyrics - castles crumbling lyrics.csv", header = TRUE)
+foolish_one_lyrics <- read.csv("/Users/mollysiebecker/Downloads/recent vault track lyrics - foolish one lyrics.csv", header = TRUE)
+timeless_lyrics <- read.csv("/Users/mollysiebecker/Downloads/recent vault track lyrics - timeless lyrics.csv", header = TRUE)
+slut_lyrics <- read.csv("/Users/mollysiebecker/Downloads/recent vault track lyrics - slut lyrics (1).csv", header = TRUE)
+say_dont_go_lyrics <- read.csv("/Users/mollysiebecker/Downloads/recent vault track lyrics - say don't go lyrics.csv", header = TRUE)
+now_that_we_dont_talk_lyrics <- read.csv("/Users/mollysiebecker/Downloads/recent vault track lyrics - now that we don't talk lyrics.csv", header = TRUE)
+suburban_legends_lyrics <- read.csv("/Users/mollysiebecker/Downloads/recent vault track lyrics - suburban legends lyrics.csv", header = TRUE)
+is_it_over_now_lyrics <- read.csv("/Users/mollysiebecker/Downloads/recent vault track lyrics - is it over now lyrics.csv", header = TRUE)
+```
+
+Then, I created a new data frame for each of these songs that matches the structure of taylor_songs_filtered.
+```{r}
+electric_touch <- data.frame(album_name = "Speak Now", track_number = 18, track_name = "Electric Touch (Taylor's Version) [From the Vault]", tempo = 131, key_name = "G", mode_name = "major", lyrics = list(electric_touch_lyrics))
+when_emma <- data.frame(album_name = "Speak Now", track_number = 19, track_name = "When Emma Falls in Love (Taylor's Version) [From the Vault]", tempo = 78, key_name = "D", mode_name = "major", lyrics = list(when_emma_lyrics))
+i_can_see_you <- data.frame(album_name = "Speak Now", track_number = 20, track_name = "I Can See You (Taylor's Version) [From the Vault]", tempo = 123, key_name = "Gb", mode_name = "major", lyrics = list(i_can_see_you_lyrics))
+castles_crumbling <- data.frame(album_name = "Speak Now", track_number = 21, track_name = "Castles Crumbling (Taylor's Version) [From the Vault]", tempo = 148, key_name = "E", mode_name = "minor", lyrics = list(castles_crumbling_lyrics))
+foolish_one <- data.frame(album_name = "Speak Now", track_number = 22, track_name = "Foolish One (Taylor's Version) [From the Vault]", tempo = 97, key_name = "G", mode_name = "major", lyrics = list(foolish_one_lyrics))
+timeless <- data.frame(album_name = "Speak Now", track_number = 23, track_name = "Timeless (Taylor's Version) [From the Vault]", tempo = 143, key_name = "Eb", mode_name = "major", lyrics = list(timeless_lyrics))
+slut <- data.frame(album_name = "1989", track_number = 17, track_name = "'Slut!' (Taylor's Version) [From the Vault]", tempo = 148, key_name = "D", mode_name = "major", lyrics = list(slut_lyrics))
+say_dont_go <- data.frame(album_name = "1989", track_number = 18, track_name = "Say Don't Go (Taylor's Version) [From the Vault]", tempo = 110, key_name = "E", mode_name = "major", lyrics = list(say_dont_go_lyrics))
+now_that_we_dont_talk <- data.frame(album_name = "1989", track_number = 19, track_name = "Now That We Don't Talk (Taylor's Version) [From the Vault]", tempo = 110, key_name = "C", mode_name = "major", lyrics = list(now_that_we_dont_talk_lyrics))
+suburban_legends <- data.frame(album_name = "1989", track_number = 20, track_name = "Suburban Legends (Taylor's Version) [From the Vault]", tempo = 118, key_name = "C", mode_name = "major", lyrics = list(suburban_legends_lyrics))
+is_it_over_now <- data.frame(album_name = "1989", track_number = 21, track_name = "Is It Over Now? (Taylor's Version) [From the Vault]", tempo = 100, key_name = "C", mode_name = "major", lyrics = list(is_it_over_now_lyrics))
+```
+
+Finally, I unnested taylor_songs_filtered so that each row contained on line of a song, then bound this data frame with the newly released vault tracks, and finally unnested again so that each row contains one word.
+```{r}
+taylor_unnested <- taylor_songs_filtered %>%
+  unnest(cols = 7) %>%
+  select(-c(7,9:10))
+
+taylor_unnested <- rbind(taylor_unnested, electric_touch, when_emma, i_can_see_you, castles_crumbling, foolish_one, timeless, slut, say_dont_go, now_that_we_dont_talk, suburban_legends, is_it_over_now)
+
+taylor_unnested <- unnest_tokens(taylor_unnested, word, lyric)
+```
+
+Below, I started transforming the data for analysis, first by creating new variables for both the total word count and the unique word count in a song.
+```{r}
+taylor_unnested <- taylor_unnested %>%
+ group_by(track_name) %>%
+  mutate(total_word_count = n()) %>%
+  mutate(unique_word_count = n_distinct(word))
+
+```
+
+Then, I created a new data frame taylor_sentiment by performing an inner join with the "bing" sentiment lexicon so that now each row represents a word that is assigned either a positive or negative value in the lexicon. I created new variables for the total number of positive and negative words in a song, as well as for the proportion of total positive and negative words.
+```{r}
+taylor_sentiment <- taylor_unnested %>%
+  inner_join(get_sentiments("bing"), relationship = "many-to-many") %>%
+  group_by(track_name) %>%
+  mutate(
+    positive_count_total = sum(sentiment == "positive"),
+    negative_count_total = sum(sentiment == "negative"),
+    p_positive_total = positive_count_total/total_word_count,
+    p_negative_total = negative_count_total/total_word_count)
+```
+
+I noticed a limitation of this type of analysis in the first two rows of the data frame: "shame" and "lie" are both listed as negative words from the first stanza of her first song, which contains no positive words. However, the lines are "He said the way my blue eyes shined/Put those Georgia starts to shame that night,/I said, 'That's a lie.'" The sentiment lexicon is not able to grasp the overall positive sentiment of the lines. 
+
+In exploring the data frame further, I noticed that "Shake It Off" is the song with the single greatest proportion of total negative words. However, familiarity with the song of course indicates that it is an overwhelmingly positive, upbeat dance tune. I decided to look further at unique positive and negative words to see if this would yield results that seem closer to what I would already know of these songs. Below, I created variables for both number of unique positive and negative words as well as for proportion of unique positive and negative words.
+```{r}
+taylor_sentiment <- taylor_sentiment %>%
+  group_by(track_name) %>%
+  mutate(
+    unique_positive_word_count = n_distinct(ifelse(sentiment == "positive", word, NA), na.rm = TRUE),
+    unique_negative_word_count = n_distinct(ifelse(sentiment == "negative", word, NA), na.rm = TRUE),
+    p_positive_unique = unique_positive_word_count/unique_word_count,
+    p_negative_unique = unique_negative_word_count/unique_word_count
+  )
+```
+
+Below, I inspected the sentiments available in the "nrc" lexicon, and chose to transform taylor_unnested to perform inner joins with "joy" and "sadness" to be used in analysis based on the modality of the songs later.
+```{r}
+nrc <- get_sentiments("nrc")
+sentiments <- unique(nrc$sentiment)
+
+taylor_joy_sadness <- taylor_unnested %>%
+  inner_join(get_sentiments("nrc"), relationship = "many-to-many") %>%
+  group_by(track_name) %>%
+  mutate(
+    joy_count_total = sum(sentiment == "joy"),
+    sadness_count_total = sum(sentiment == "sadness"),
+    p_joy_total = joy_count_total / total_word_count,
+    p_sadness_total = sadness_count_total / total_word_count
+  )
+
+taylor_joy_sadness <- taylor_joy_sadness %>%
+  group_by(track_name) %>%
+  mutate(
+    unique_joy_word_count = n_distinct(ifelse(sentiment == "joy", word, NA), na.rm = TRUE),
+    unique_sadness_word_count = n_distinct(ifelse(sentiment == "sadness", word, NA), na.rm = TRUE),
+    p_joy_unique = unique_joy_word_count/unique_word_count,
+    p_sadness_unique = unique_sadness_word_count/unique_word_count
+  )
+```
+
+## Analysis: "I Trace the Evidence, Make it Make Some Sense"
+
+Below, I set out to analyze the data by first dropping the columns with the lyrics and sentiments since the statistics had already been gleaned from them, and then I removed all the duplicate rows so that each row now represents one song in her discography.
+```{r}
+taylor_sentiment_summarized <- taylor_sentiment %>%
+  select(-c(7,10)) %>%
+  distinct()
+```
+
+### Most Positive Songs: "This Is the Golden Age of Something Good and Right and Real"
+
+Below, I display the five most "positive" songs in Swift's discography as measured by the songs with the greatest proportion of unique positive words.
+```{r}
+top_five_positive <- taylor_sentiment_summarized %>%
+  arrange(desc(p_positive_unique)) %>%
+  head(5) 
+top_five_positive$track_name <- factor(top_five_positive$track_name, levels = top_five_positive$track_name[order(top_five_positive$p_positive_unique, decreasing = FALSE)])
+ggplot(top_five_positive, aes(x = track_name, y = p_positive_unique, fill = track_name)) +
+  geom_bar(stat = "identity", show.legend = FALSE) +
+  labs(title = "'Most Positive' Taylor Swift Songs", x = "Track", y = "Proportion of Unique Positive Words") +
+  coord_flip()
+```
+
+The first three songs I would describe as positive from my knowledge of them. "Sad Beautiful Tragic" and "The Lucky One" I would say are both overall negative, but they contain either repeated instances of longing for positive times in the past or of reflecting on what "should" be appreciated as a good life but isn't, respectively, which inflates their positive word counts.
+
+### Most Negative Songs: "My Twisted Knife, My Sleepless Night"
+
+Below, I display the five most "negative" songs in Swift's discography as measured by the songs with the greatest proportion of unique negative words.
+```{r}
+top_five_negative <- taylor_sentiment_summarized %>%
+  arrange(desc(p_negative_unique)) %>%
+  head(5) 
+top_five_negative$track_name <- factor(top_five_negative$track_name, levels = top_five_negative$track_name[order(top_five_negative$p_negative_unique, decreasing = FALSE)])
+ggplot(top_five_negative, aes(x = track_name, y = p_negative_unique, fill = track_name)) +
+  geom_bar(stat = "identity", show.legend = FALSE) +
+  labs(title = "'Most Negative' Taylor Swift Songs", x = "Track", y = "Proportion of Unique Negative Words") +
+  coord_flip()
+```
+
+In this case, I would describe all of these songs as negative. 
+
+### Sentiment by Modality: "You Make Me So Happy It Turns Back To Sad"
+
+Below, I decided to look at if there were a difference in proportion of joyous and sad words based on the modality of the song (whether it is in a major or a minor key.) First I removed unnecessary columns and duplicate rows as in the previous analysis.
+```{r}
+taylor_joy_sad_summarized <- taylor_joy_sadness %>%
+  select(-c(7,10)) %>%
+  distinct()
+```
+Below, I summarize the average proportion of unique joyous and sad words for each modality, and compare these averages in bar graphs. 
+```{r}
+taylor_mode_summarized<- taylor_joy_sad_summarized %>%
+  group_by(mode_name) %>%
+  summarize(
+    mode_average_joy = mean(p_joy_unique, na.rm = TRUE),
+    mode_average_sadness = mean(p_sadness_unique, na.rm = TRUE)
+    )
+
+ggplot(taylor_mode_summarized, aes(x = mode_name, y = mode_average_joy, fill = mode_name)) +
+  geom_bar(stat = "identity", show.legend = FALSE) +
+  labs(title = "Joy in Taylor Swift Songs by Modality", x = "Modality", y = "Average Proportion of Unique 'Joyous' Words")
+
+ggplot(taylor_mode_summarized, aes(x = mode_name, y = mode_average_sadness, fill = mode_name)) +
+  geom_bar(stat = "identity", show.legend = FALSE) +
+  labs(title = "Sadness in Taylor Swift Songs by Modality", x = "Modality", y = "Average Proportion of Unique 'Sad' Words")
+```
+
+# Findings and Recommendations: "Ask Me What I Learned"
+
+Children learning musical modality are commonly taught that music in a major key "sounds happy" and music in a minor key "sounds sad." This adage seems to extend only somewhat to lyrical analysis of Swift's work as well: although major key songs have the slightest, almost imperceptible, edge in "joyous" lyrics, minor songs have more of a clear advantage in "sad" lyrics. This could also be due to the fact that so many more of her songs are written in major keys; to write in a minor key is more of an intentional choice. Swift is also known for combining some decidedly sad lyrics with upbeat melodies (one of her "most negative" songs, "Hits Different" is a great example of this.) I find it interesting that the stronger association of the minor key songs with the sad lyrics also mirrors the stronger association of her most "negative" songs with actual negative meaning than of her most "positive" songs with positive meaning. It does seem more likely that sad songs would contain happy words, lamenting what is not or what was, than that happy songs would contain quite as many sad words, leading more sad songs to be disguised as "positive" songs than the reverse. For further analysis, I think it would be interesting to investigate other sentiments in the "nrc" lexicon, or how the sentiments of her music have changed with her albums over the course of her career, or if there is a correlation between quantifiers of sentiment and tempo.
